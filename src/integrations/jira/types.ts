@@ -26,6 +26,11 @@ export interface SimplifiedJiraIssue {
   description?: string;
 }
 
+export interface SimplifiedJiraProject {
+  key: string;
+  name: string;
+}
+
 export interface JiraSearchResult {
   issues: JiraIssue[];
   total: number;

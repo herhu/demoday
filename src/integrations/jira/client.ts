@@ -1,5 +1,5 @@
 import { getSecrets } from "../../security/secrets.js";
-import type { JiraIssue, JiraSearchResult } from "./types.js";
+import type { JiraIssue, JiraSearchResult, SimplifiedJiraProject } from "./types.js";
 import { httpRequest } from "../../utils/http.js";
 
 export class JiraClient {
@@ -64,6 +64,14 @@ export class JiraClient {
   async getIssue(issueKey: string, correlationId?: string): Promise<JiraIssue> {
     return this.fetch<JiraIssue>(
       `/issue/${issueKey}?fields=summary,status,priority,assignee,description`,
+      {},
+      correlationId
+    );
+  }
+
+  async getProjects(correlationId?: string): Promise<SimplifiedJiraProject[]> {
+    return this.fetch<SimplifiedJiraProject[]>(
+      `/project`,
       {},
       correlationId
     );

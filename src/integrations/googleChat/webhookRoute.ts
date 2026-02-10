@@ -5,6 +5,7 @@ import { orchestrator } from "../../orchestration/orchestrator.js";
 import { config } from "../../config/env.js";
 import { generateCorrelationId } from "../../observability/correlation.js";
 import { sanitizeUserText } from "../../security/sanitization.js";
+import { formatter } from "../../orchestration/formatter.js";
 
 export async function googleChatWebhookRoute(server: FastifyInstance) {
   server.post<{ Body: GoogleChatEvent }>("/google-chat/webhook", async (request, reply) => {
@@ -29,12 +30,13 @@ export async function googleChatWebhookRoute(server: FastifyInstance) {
 
     // Handle app being added (simple check for now)
     if (isAdded) {
+      const helpText = formatter.formatHelp();
       return reply
         .code(200)
         .header("content-type", "application/json")
         .send({
           actionResponse: { type: "NEW_MESSAGE" },
-          text: 'Thanks for adding me! Try: "/jira get NJS-6766" or "/jira search project = NJS"'
+          text: `Thanks for adding me! Here is what I can do:\n\n${helpText}`
         });
     }
 

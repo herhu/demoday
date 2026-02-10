@@ -3,6 +3,7 @@ import { PolicyError } from '../utils/errors.js';
 const ALLOWED_TOOLS = new Set([
   'jira.searchIssues',
   'jira.getIssue',
+  'jira.listProjects',
 ]);
 
 const ALLOWED_SOURCES = new Set(['google-chat', 'simulator']);

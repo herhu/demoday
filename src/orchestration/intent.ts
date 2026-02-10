@@ -1,5 +1,5 @@
 
-export type IntentKind = 'JIRA_SEARCH' | 'JIRA_GET' | 'HELP' | 'UNKNOWN';
+export type IntentKind = 'JIRA_SEARCH' | 'JIRA_GET' | 'HELP' | 'UNKNOWN' | 'JIRA_LIST_PROJECTS';
 
 export interface Intent {
   kind: IntentKind;
@@ -56,7 +56,25 @@ export class IntentParser {
        return { kind: 'JIRA_SEARCH', parameters: { jql }, rawCommand: text };
     }
 
-    return { kind: 'HELP', rawCommand: text };
+    if (command === 'projects') {
+       // /jira projects
+       return { kind: 'JIRA_LIST_PROJECTS', rawCommand: text };
+    }
+
+    if (command === 'list') {
+        // /jira list <ProjectKey> => search project = <Key> ORDER BY created DESC
+        const projectKey = simpleParts[2];
+        if (!projectKey) return { kind: 'HELP', rawCommand: text };
+        
+        const jql = `project = "${projectKey}" ORDER BY created DESC`;
+        return { kind: 'JIRA_SEARCH', parameters: { jql }, rawCommand: text };
+    }
+
+    if (command === 'help') {
+        return { kind: 'HELP', rawCommand: text };
+    }
+
+    return { kind: 'HELP', rawCommand: text }; // Default to help for unknown commands
   }
 }
 

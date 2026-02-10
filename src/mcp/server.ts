@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { jiraSearchTool } from "./tools/jiraSearch.js";
 import { jiraGetIssueTool } from "./tools/jiraGetIssue.js";
+import { jiraListProjectsTool } from "./tools/jiraListProjects.js";
 
 export const mcpServer = new McpServer({
   name: "Demo MCP Server",
@@ -26,4 +27,14 @@ mcpServer.registerTool(
     outputSchema: jiraGetIssueTool.outputSchema,
   },
   jiraGetIssueTool.handler
+);
+
+mcpServer.registerTool(
+  jiraListProjectsTool.name,
+  {
+    description: jiraListProjectsTool.description,
+    inputSchema: jiraListProjectsTool.schema,
+    outputSchema: jiraListProjectsTool.outputSchema,
+  },
+  jiraListProjectsTool.handler
 );

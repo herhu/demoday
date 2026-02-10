@@ -7,7 +7,8 @@ import { validate } from '../utils/validate.js';
 import { JiraSearchSchema } from '../mcp/schemas/jiraSearch.schema.js'; // Updated import path
 import { JiraGetIssueSchema } from '../mcp/schemas/jiraGetIssue.schema.js'; // Updated import path
 import { toPublicMessage } from '../utils/errors.js';
-import type { SimplifiedJiraIssue } from '../integrations/jira/types.js'; // New import
+import type { SimplifiedJiraIssue, SimplifiedJiraProject } from '../integrations/jira/types.js'; // New import
+import { JiraListProjectsSchema } from '../mcp/schemas/jiraListProjects.schema.js';
 
 export class Orchestrator {
   async handleChatCommand(
@@ -103,6 +104,34 @@ export class Orchestrator {
             assignee: issue.assignee,
             description: issue.description
         });
+      } else if (intent.kind === 'JIRA_LIST_PROJECTS') {
+        // 1. Policy check
+        policy.assertAllowedTool('jira.listProjects', correlationId);
+
+        // 2. Validate args (empty schema, but good practice)
+        const args = validate(
+            JiraListProjectsSchema,
+            { correlationId },
+            correlationId
+        );
+
+        auditLogger.log({
+            correlationId,
+            source: 'orchestrator',
+            event: 'tool.call',
+            details: { tool: 'jira.listProjects', args },
+        });
+
+        // 3. Execute via MCP Client
+        const response = await mcpClient.callTool<typeof args, { projects: SimplifiedJiraProject[] }>(
+            correlationId,
+            'jira.listProjects',
+            args
+        );
+        
+        // 4. Format
+        result = formatter.formatProjectList(response.projects);
+
       } else {
         result = "I'm sorry, I don't know how to handle that request.";
       }
