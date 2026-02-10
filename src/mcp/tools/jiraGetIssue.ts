@@ -1,6 +1,9 @@
-
-import { JiraGetIssueSchema } from '../schemas/jiraGetIssue.schema.js';
+import { z } from 'zod';
 import { jiraClient } from '../../integrations/jira/client.js';
+
+export const JiraGetIssueSchema = z.object({
+  issueKey: z.string().describe('The issue key (e.g. PROJ-123)'),
+});
 
 export const jiraGetIssueTool = {
   name: 'jira_get_issue',

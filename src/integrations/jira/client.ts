@@ -27,18 +27,22 @@ export class JiraClient {
     });
   }
 
-  async searchIssues(jql: string, maxResults: number = 10): Promise<JiraSearchResult> {
+  async searchIssues(jql: string, maxResults: number = 10, correlationId?: string): Promise<JiraSearchResult> {
     const params = new URLSearchParams({
       jql,
       maxResults: maxResults.toString(),
       fields: 'summary,status,priority,assignee,description',
     });
 
-    return this.fetch<JiraSearchResult>(`/search?${params.toString()}`);
+    return this.fetch<JiraSearchResult>(`/search?${params.toString()}`, {
+      headers: correlationId ? { 'x-correlation-id': correlationId } : undefined,
+    });
   }
 
-  async getIssue(issueKey: string): Promise<JiraIssue> {
-    return this.fetch<JiraIssue>(`/issue/${issueKey}?fields=summary,status,priority,assignee,description`);
+  async getIssue(issueKey: string, correlationId?: string): Promise<JiraIssue> {
+    return this.fetch<JiraIssue>(`/issue/${issueKey}?fields=summary,status,priority,assignee,description`, {
+      headers: correlationId ? { 'x-correlation-id': correlationId } : undefined,
+    });
   }
 }
 

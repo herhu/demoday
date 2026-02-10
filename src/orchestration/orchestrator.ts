@@ -2,12 +2,12 @@ import { intentParser } from './intent.js';
 import { policy } from './policy.js';
 import { formatter } from './formatter.js';
 import { auditLogger } from '../observability/audit.js';
-import { jiraSearchTool } from '../mcp/tools/jiraSearch.js';
-import { jiraGetIssueTool } from '../mcp/tools/jiraGetIssue.js';
+import { mcpClient } from '../index.js'; // Import the singleton client
 import { validate } from '../utils/validate.js';
-import { JiraSearchSchema } from '../mcp/schemas/jiraSearch.schema.js';
-import { JiraGetIssueSchema } from '../mcp/schemas/jiraGetIssue.schema.js';
+import { JiraSearchSchema } from '../mcp/tools/jiraSearch.js'; // Updated import path
+import { JiraGetIssueSchema } from '../mcp/tools/jiraGetIssue.js'; // Updated import path
 import { toPublicMessage } from '../utils/errors.js';
+import type { SimplifiedJiraIssue } from '../integrations/jira/types.js'; // New import
 
 export class Orchestrator {
   async handleChatCommand(
@@ -34,47 +34,69 @@ export class Orchestrator {
       // 3. Execution (Deterministic Plan)
       let result;
       if (intent.kind === 'JIRA_SEARCH') {
-        policy.assertAllowedTool('jira_search_issues');
+        // 1. Policy check
+        policy.assertAllowedTool('jira.searchIssues');
         
-        // Validate arguments
-        const args = validate(JiraSearchSchema, { 
-            jql: intent.parameters?.jql, 
-            maxResults: 10 
-        }, correlationId);
+        // 2. Validate args
+        const args = validate(
+          JiraSearchSchema,
+          { jql: intent.parameters?.jql, maxResults: 10 },
+          correlationId
+        );
 
-        auditLogger.log({ correlationId, source, event: 'tool.call', details: { tool: 'jira_search_issues', args } });
+        auditLogger.log({
+          correlationId,
+          source: 'orchestrator',
+          event: 'tool.call',
+          details: { tool: 'jira.searchIssues', args },
+        });
         
-        const mcpResult = await jiraSearchTool.handler(args);
-        if (!mcpResult.content[0] || !('text' in mcpResult.content[0])) {
-             throw new Error('Invalid tool output');
-        }
-        const issues = JSON.parse(mcpResult.content[0].text);
+        // 3. Execute via MCP Client
+        const issues = await mcpClient.callTool<typeof args, SimplifiedJiraIssue[]>(
+          correlationId,
+          'jira.searchIssues',
+          args
+        );
+
+        // 4. Format
         result = formatter.formatJiraList(issues);
 
       } else if (intent.kind === 'JIRA_GET') {
-         policy.assertAllowedTool('jira_get_issue');
+        // 1. Policy check
+        policy.assertAllowedTool('jira.getIssue');
          
-         const args = validate(JiraGetIssueSchema, {
-             issueKey: intent.parameters?.issueKey
-         }, correlationId);
+        // 2. Validate args
+        const args = validate(
+          JiraGetIssueSchema,
+          { issueKey: intent.parameters?.issueKey },
+          correlationId
+        );
 
-         auditLogger.log({ correlationId, source, event: 'tool.call', details: { tool: 'jira_get_issue', args } });
+        auditLogger.log({
+          correlationId,
+          source: 'orchestrator',
+          event: 'tool.call',
+          details: { tool: 'jira.getIssue', args },
+        });
          
-         const mcpResult = await jiraGetIssueTool.handler(args);
-         
-         if (!mcpResult.content[0] || !('text' in mcpResult.content[0])) {
-             throw new Error('Invalid tool output');
-         }
+        // 3. Execute via MCP Client
+        const issue = await mcpClient.callTool<typeof args, SimplifiedJiraIssue>(
+          correlationId,
+          'jira.getIssue',
+          args
+        );
 
-         const issue = JSON.parse(mcpResult.content[0].text);
-         result = formatter.formatJiraIssue({
-             key: issue.key,
-             summary: issue.summary,
-             status: issue.status,
-             priority: issue.priority,
-             assignee: issue.assignee,
-             description: issue.description
-         });
+        // 4. Format
+        result = formatter.formatJiraIssue({
+            key: issue.key,
+            summary: issue.summary,
+            status: issue.status,
+            priority: issue.priority,
+            assignee: issue.assignee,
+            description: issue.description
+        });
+      } else {
+        result = "I'm sorry, I don't know how to handle that request.";
       }
 
       auditLogger.log({ correlationId, source, event: 'egress', details: { result } });

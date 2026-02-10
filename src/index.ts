@@ -1,3 +1,6 @@
+import { McpHttpClient } from './mcp/client.js';
+
+export const mcpClient = new McpHttpClient(process.env.MCP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`);
 
 import Fastify from 'fastify';
 import { config } from './config/env.js';

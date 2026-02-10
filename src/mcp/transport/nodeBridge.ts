@@ -6,23 +6,37 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 /**
  * Creates a bridge between Node.js HTTP (Fastify raw) and the MCP SDK transport.
+ * 
+ * Note: This returns a singleton-like handler structure, but for true singleton behavior
+ * across HMR or multiple calls, the caller should maintain the instance.
  */
-export function createMcpHttpBridge(mcpServer: McpServer) {
+export async function createMcpHttpBridge(mcpServer: McpServer) {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
+    // Enforce DNS rebinding protection if needed, though SDK defaults are usually improved.
   });
 
-  // Connect the server to the transport
-  // Note: We don't await this here to keep the factory synchronous,
-  // but in a real app you might want to await initialization.
-  // Ideally, call this once at startup.
-  mcpServer.connect(transport).catch((err) => {
+  // Await connection to ensure the server is ready before handling requests
+  try {
+    await mcpServer.connect(transport);
+    console.log('MCP Server connected to Streamable HTTP transport');
+  } catch (err) {
     console.error('Failed to connect MCP server to transport:', err);
-  });
+    throw err; // Re-throw to fail startup if critical
+  }
 
   return {
     async handle(req: IncomingMessage, res: ServerResponse) {
-      await transport.handleRequest(req, res);
+      try {
+        await transport.handleRequest(req, res);
+      } catch (err) {
+        console.error('MCP Transport error:', err);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ error: "MCP transport internal error" }));
+        }
+      }
     },
   };
 }

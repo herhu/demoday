@@ -1,24 +1,29 @@
+import { PolicyError } from '../utils/errors.js';
 
-export class Policy {
-  assertWithinLimits(text: string): void {
-    if (text.length > 1000) {
-      throw new Error('Policy violation: Input text exceeds 1000 characters');
+const ALLOWED_TOOLS = new Set([
+  'jira.searchIssues',
+  'jira.getIssue',
+]);
+
+const ALLOWED_SOURCES = new Set(['google-chat', 'simulator']);
+const MAX_TEXT_LENGTH = 1000;
+
+export const policy = {
+  assertAllowedSource(source: string, correlationId?: string) {
+    if (!ALLOWED_SOURCES.has(source)) {
+      throw new PolicyError(`Source '${source}' is not allowed by policy.`, correlationId || 'unknown');
     }
-  }
+  },
 
-  assertAllowedSource(source: string): void {
-    const allowed = ['google-chat'];
-    if (!allowed.includes(source)) {
-      throw new Error(`Policy violation: Source '${source}' is not allowed`);
+  assertWithinLimits(text: string, correlationId?: string) {
+    if (text.length > MAX_TEXT_LENGTH) {
+      throw new PolicyError(`Input exceeds maximum length of ${MAX_TEXT_LENGTH} characters.`, correlationId || 'unknown');
     }
-  }
+  },
 
-  assertAllowedTool(toolName: string): void {
-    const allowed = ['jira_search_issues', 'jira_get_issue'];
-    if (!allowed.includes(toolName)) {
-      throw new Error(`Policy violation: Tool '${toolName}' is not allowed`);
+  assertAllowedTool(toolName: string, correlationId?: string) {
+    if (!ALLOWED_TOOLS.has(toolName)) {
+      throw new PolicyError(`Tool '${toolName}' is not allowed by policy.`, correlationId || 'unknown');
     }
-  }
-}
-
-export const policy = new Policy();
+  },
+};

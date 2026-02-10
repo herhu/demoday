@@ -1,12 +1,6 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-
-// We might need a custom transport or use the SSEServerTransport with an adapter if the SDK supports it.
-// The instructions say "Streamable HTTP endpoint". 
-// The SDK has SSEServerTransport.
-// However, the prompt says "POST/GET /mcp".
-// The standard MCP over HTTP uses SSE for events and POST for requests.
-// Let's implement the server instance first.
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { jiraSearchTool } from './tools/jiraSearch.js';
 import { jiraGetIssueTool } from './tools/jiraGetIssue.js';
@@ -19,19 +13,19 @@ export const mcpServer = new McpServer({
 
 // Register tools
 mcpServer.registerTool(
-  jiraSearchTool.name,
+  'jira.searchIssues',
   {
     description: jiraSearchTool.description,
-    inputSchema: jiraSearchTool.schema.shape,
+    inputSchema: zodToJsonSchema(jiraSearchTool.schema as any) as any,
   },
   jiraSearchTool.handler
 );
 
 mcpServer.registerTool(
-  jiraGetIssueTool.name,
+  'jira.getIssue',
   {
     description: jiraGetIssueTool.description,
-    inputSchema: jiraGetIssueTool.schema.shape,
+    inputSchema: zodToJsonSchema(jiraGetIssueTool.schema as any) as any,
   },
   jiraGetIssueTool.handler
 );

@@ -1,6 +1,10 @@
-
-import { JiraSearchSchema } from '../schemas/jiraSearch.schema.js';
+import { z } from 'zod';
 import { jiraClient } from '../../integrations/jira/client.js';
+
+export const JiraSearchSchema = z.object({
+  jql: z.string().describe('JQL query string'),
+  maxResults: z.number().optional().default(10).describe('Maximum number of results to return'),
+});
 
 export const jiraSearchTool = {
   name: 'jira_search_issues',
