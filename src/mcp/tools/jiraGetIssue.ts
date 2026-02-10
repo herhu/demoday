@@ -1,17 +1,13 @@
-import { z } from 'zod';
+import { JiraGetIssueSchema } from '../schemas/jiraGetIssue.schema.js';
 import { jiraClient } from '../../integrations/jira/client.js';
-
-export const JiraGetIssueSchema = z.object({
-  issueKey: z.string().describe('The issue key (e.g. PROJ-123)'),
-});
 
 export const jiraGetIssueTool = {
   name: 'jira_get_issue',
   description: 'Get details of a specific Jira issue by key',
   schema: JiraGetIssueSchema,
   handler: async (args: unknown) => {
-    const { issueKey } = JiraGetIssueSchema.parse(args);
-    const issue = await jiraClient.getIssue(issueKey);
+    const { issueKey, correlationId } = JiraGetIssueSchema.parse(args);
+    const issue = await jiraClient.getIssue(issueKey, correlationId);
     return {
       content: [
         {

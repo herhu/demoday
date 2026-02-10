@@ -1,56 +1,90 @@
 
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { auditLogger } from "../observability/audit.js";
 import { ToolError } from "../utils/errors.js";
 
-type McpToolTextResult = { content: Array<{ type: string; text?: string }> };
-
 export class McpHttpClient {
-  constructor(private readonly baseUrl: string) {}
+  private readonly client: Client;
+  private readonly transport: StreamableHTTPClientTransport;
+  private connected = false;
+
+  constructor(private readonly baseUrl: string) {
+    this.client = new Client(
+      { name: "DemoOrchestrator", version: "1.0.0" },
+      { capabilities: {} }
+    );
+    this.transport = new StreamableHTTPClientTransport(new URL("/mcp", this.baseUrl));
+  }
+
+  private async ensureConnected(): Promise<void> {
+    if (this.connected) return;
+
+    try {
+      await this.client.connect(this.transport);
+      // Optional (but nice): caches tool metadata and validates server tools exist
+      try {
+          await this.client.listTools();
+      } catch (listError) {
+          console.warn("Failed to list tools during connection warmup:", listError);
+      }
+      this.connected = true;
+    } catch (e: any) {
+      throw new ToolError(`Failed to connect MCP client: ${e?.message ?? String(e)}`, "N/A");
+    }
+  }
 
   async callTool<TArgs extends object, TResult>(
     correlationId: string,
     toolName: string,
     args: TArgs
   ): Promise<TResult> {
-    auditLogger.log({ correlationId, source: "mcpClient", event: "mcp.call", details: { toolName } });
-
-    const payload = {
-      jsonrpc: "2.0",
-      id: correlationId,
-      method: "tools/call",
-      params: { name: toolName, arguments: args },
-    };
-
-    const res = await fetch(`${this.baseUrl}/mcp`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-correlation-id": correlationId,
-      },
-      body: JSON.stringify(payload),
+    auditLogger.log({
+      correlationId,
+      source: "mcpClient",
+      event: "mcp.call",
+      details: { toolName },
     });
 
-    if (!res.ok) {
-      throw new ToolError(`MCP tool call failed (${res.status})`, correlationId);
+    await this.ensureConnected();
+
+    let result: any;
+    try {
+      result = await this.client.callTool({ name: toolName, arguments: args as Record<string, unknown> });
+    } catch (e: any) {
+      throw new ToolError(`MCP callTool failed: ${e?.message ?? String(e)}`, correlationId);
     }
 
-    const rpc = await res.json();
-
-    if (rpc.error) {
-      throw new ToolError(`MCP error: ${rpc.error.message ?? "unknown"}`, correlationId);
+    if (result?.isError) {
+      throw new ToolError(`Tool returned error: ${toolName}`, correlationId);
     }
 
-    const result = rpc.result as McpToolTextResult;
+    // Prefer structuredContent if you later add outputSchema
+    if (result?.structuredContent) {
+      // In SDK 1.0.1+, structuredContent might be the array. 
+      // We assume the tool returns a shape that matches TResult or needs extraction.
+      // For now, let's look for known patterns or return as is.
+      // If the caller expects a specific type, we might need to handle it.
+      // But typically structuredContent is { type: "resource" | "text" ... }[]
+      // Let's fallback to text parsing if structuredContent isn't the direct Result.
+    }
 
     const first = result?.content?.[0];
-    if (!first || first.type !== "text" || typeof first.text !== "string") {
-      throw new ToolError("Invalid MCP tool output (expected text)", correlationId);
+    const text = first && typeof first.text === "string" ? first.text : undefined;
+
+    if (!text) {
+      throw new ToolError(`Invalid tool output for ${toolName} (expected text)`, correlationId);
     }
 
     try {
-      return JSON.parse(first.text) as TResult;
+      return JSON.parse(text) as TResult;
     } catch {
-      throw new ToolError("MCP tool output was not valid JSON", correlationId);
+      throw new ToolError(`Tool output for ${toolName} was not valid JSON`, correlationId);
     }
+  }
+
+  async close(): Promise<void> {
+    await this.transport.close();
+    this.connected = false;
   }
 }

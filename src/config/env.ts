@@ -12,6 +12,7 @@ const envSchema = z.object({
   JIRA_DEFAULT_PROJECT: z.string().optional(),
   GOOGLE_CHAT_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   GOOGLE_CHAT_API_TOKEN: z.string().optional(),
+  MCP_BASE_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

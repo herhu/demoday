@@ -1,18 +1,14 @@
-import { z } from 'zod';
+// If using centralized schema, import it:
+import { JiraSearchSchema } from '../schemas/jiraSearch.schema.js';
 import { jiraClient } from '../../integrations/jira/client.js';
-
-export const JiraSearchSchema = z.object({
-  jql: z.string().describe('JQL query string'),
-  maxResults: z.number().optional().default(10).describe('Maximum number of results to return'),
-});
 
 export const jiraSearchTool = {
   name: 'jira_search_issues',
   description: 'Search for issues in Jira using JQL',
   schema: JiraSearchSchema,
   handler: async (args: unknown) => {
-    const { jql, maxResults } = JiraSearchSchema.parse(args);
-    const results = await jiraClient.searchIssues(jql, maxResults);
+    const { jql, maxResults, correlationId } = JiraSearchSchema.parse(args);
+    const results = await jiraClient.searchIssues(jql, maxResults, correlationId);
     return {
       content: [
         {

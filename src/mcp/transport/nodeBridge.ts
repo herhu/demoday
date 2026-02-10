@@ -35,6 +35,8 @@ export async function createMcpHttpBridge(mcpServer: McpServer) {
           res.statusCode = 500;
           res.setHeader("content-type", "application/json");
           res.end(JSON.stringify({ error: "MCP transport internal error" }));
+        } else {
+          res.end();
         }
       }
     },

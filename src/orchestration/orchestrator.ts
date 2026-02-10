@@ -4,8 +4,8 @@ import { formatter } from './formatter.js';
 import { auditLogger } from '../observability/audit.js';
 import { mcpClient } from '../index.js'; // Import the singleton client
 import { validate } from '../utils/validate.js';
-import { JiraSearchSchema } from '../mcp/tools/jiraSearch.js'; // Updated import path
-import { JiraGetIssueSchema } from '../mcp/tools/jiraGetIssue.js'; // Updated import path
+import { JiraSearchSchema } from '../mcp/schemas/jiraSearch.schema.js'; // Updated import path
+import { JiraGetIssueSchema } from '../mcp/schemas/jiraGetIssue.schema.js'; // Updated import path
 import { toPublicMessage } from '../utils/errors.js';
 import type { SimplifiedJiraIssue } from '../integrations/jira/types.js'; // New import
 
@@ -22,8 +22,8 @@ export class Orchestrator {
 
     try {
       // 1. Policy
-      policy.assertAllowedSource(source);
-      policy.assertWithinLimits(text);
+      policy.assertAllowedSource(source, correlationId);
+      policy.assertWithinLimits(text, correlationId);
 
       // 2. Intent
       const intent = intentParser.parse(text);
@@ -35,12 +35,16 @@ export class Orchestrator {
       let result;
       if (intent.kind === 'JIRA_SEARCH') {
         // 1. Policy check
-        policy.assertAllowedTool('jira.searchIssues');
+        policy.assertAllowedTool('jira.searchIssues', correlationId);
         
         // 2. Validate args
         const args = validate(
           JiraSearchSchema,
-          { jql: intent.parameters?.jql, maxResults: 10 },
+          { 
+            jql: intent.parameters?.jql, 
+            maxResults: 10,
+            correlationId // Pass correlationId to schema validation/object
+          },
           correlationId
         );
 
@@ -63,12 +67,15 @@ export class Orchestrator {
 
       } else if (intent.kind === 'JIRA_GET') {
         // 1. Policy check
-        policy.assertAllowedTool('jira.getIssue');
+        policy.assertAllowedTool('jira.getIssue', correlationId);
          
         // 2. Validate args
         const args = validate(
           JiraGetIssueSchema,
-          { issueKey: intent.parameters?.issueKey },
+          { 
+            issueKey: intent.parameters?.issueKey,
+            correlationId 
+          },
           correlationId
         );
 
