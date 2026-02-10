@@ -67,7 +67,8 @@ export class McpHttpClient {
     }
 
     if (result?.isError) {
-      throw new ToolError(`Tool returned error: ${toolName}`, correlationId);
+      const errorText = result.content?.find((c: any) => c.type === 'text')?.text || 'Unknown error';
+      throw new ToolError(`Tool returned error: ${toolName} - ${errorText}`, correlationId);
     }
 
     // ✅ Preferred path when outputSchema is defined on the server tool
