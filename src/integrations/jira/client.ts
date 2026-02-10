@@ -4,8 +4,18 @@ import { httpRequest } from "../../utils/http.js";
 
 export class JiraClient {
   private get authHeader(): string {
-    const { jiraEmail, jiraApiToken } = getSecrets();
-    return `Basic ${Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString("base64")}`;
+    const { jiraEmail, jiraApiToken, jiraBaseUrl } = getSecrets();
+    
+    // Heuristic: Jira Cloud usually ends in .atlassian.net
+    // If custom domain or server/DC, assume Personal Access Token (Bearer)
+    // unless user explicitly provided cloud credentials (email + token).
+    // However, PAT is safer default for non-atlassian domains.
+    if (jiraBaseUrl.includes(".atlassian.net")) {
+        return `Basic ${Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString("base64")}`;
+    }
+    
+    // Default to Bearer for self-hosted/DC instances using PAT
+    return `Bearer ${jiraApiToken}`;
   }
 
   private get baseUrl(): string {
@@ -17,7 +27,9 @@ export class JiraClient {
     options: RequestInit = {},
     correlationId?: string
   ): Promise<T> {
-    const url = `${this.baseUrl}/rest/api/3${path}`;
+    // Jira Server/DC usually supports API v2. Cloud supports v3.
+    // Ideally this should be configurable, but v2 is safer common partial denominator.
+    const url = `${this.baseUrl}/rest/api/2${path}`;
 
     return await httpRequest<T>(url, {
       ...options,

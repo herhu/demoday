@@ -24,14 +24,18 @@ export async function googleChatWebhookRoute(server: FastifyInstance) {
     // Legacy/Curl might look like flat structure.
     const messagePayload = event.chat?.messagePayload ?? event;
     const isMessage = !!messagePayload.message;
-    const isAdded = event.chat?.space ? false : (event.type === 'ADDED_TO_SPACE'); // Simplified check
+    // Robust check for ADDED_TO_SPACE: it's an event type, but NOT a message event.
+    const isAdded = event.type === 'ADDED_TO_SPACE' && !isMessage;
 
     // Handle app being added (simple check for now)
     if (isAdded) {
       return reply
         .code(200)
         .header("content-type", "application/json")
-        .send({ text: 'Thanks for adding me! Try: "/jira get NJS-6766" or "/jira search project = NJS"' });
+        .send({
+          actionResponse: { type: "NEW_MESSAGE" },
+          text: 'Thanks for adding me! Try: "/jira get NJS-6766" or "/jira search project = NJS"'
+        });
     }
 
     // Handle messages
@@ -61,24 +65,29 @@ export async function googleChatWebhookRoute(server: FastifyInstance) {
 
       server.log.info({ correlationId, responseText }, "google chat reply text");
 
-      // DEBUG: Simplify response to bare minimum to isolate "silent failure" cause
-      // Removing threading temporarily.
-      const response = { 
-        text: responseText 
-      };
-
-      server.log.info({ correlationId, outbound: response }, "sending response to chat");
+      // Async Reply Pattern:
+      // Instead of relying on the synchronous HTTP response (which is flaky), 
+      // we use the Google Chat API to post a new message to the thread.
+      try {
+        const { googleChatClient } = await import("./client.js");
+        await googleChatClient.sendMessage(msg.space?.name ?? "", responseText, msg.thread?.name);
+        server.log.info({ correlationId }, "async response sent via chat api");
+      } catch (err) {
+        server.log.error({ correlationId, err }, "failed to send async response");
+        // Fallback: try synchronous return if async fails? 
+        // No, mixed signals confuse the platform. Stick to one strategy.
+      }
 
       return reply
         .code(200)
         .header("content-type", "application/json")
-        .send(response);
+        .send({}); // Ack the event
     }
 
     // IMPORTANT: never return {} — return a valid message (or at least an ack)
     return reply
       .code(200)
       .header("content-type", "application/json")
-      .send({ text: "OK" });
+      .send({ actionResponse: { type: "NEW_MESSAGE" }, text: "OK" });
   });
 }
