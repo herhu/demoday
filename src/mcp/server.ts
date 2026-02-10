@@ -1,31 +1,29 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { jiraSearchTool } from "./tools/jiraSearch.js";
+import { jiraGetIssueTool } from "./tools/jiraGetIssue.js";
 
-import { jiraSearchTool } from './tools/jiraSearch.js';
-import { jiraGetIssueTool } from './tools/jiraGetIssue.js';
-
-// Create one server instance
 export const mcpServer = new McpServer({
-  name: 'Demo MCP Server',
-  version: '1.0.0',
+  name: "Demo MCP Server",
+  version: "1.0.0",
 });
 
-// Register tools
 mcpServer.registerTool(
-  'jira.searchIssues',
+  jiraSearchTool.name,
   {
     description: jiraSearchTool.description,
-    inputSchema: zodToJsonSchema(jiraSearchTool.schema as any) as any,
+    inputSchema: jiraSearchTool.schema,
+    outputSchema: jiraSearchTool.outputSchema,
   },
   jiraSearchTool.handler
 );
 
 mcpServer.registerTool(
-  'jira.getIssue',
+  jiraGetIssueTool.name,
   {
     description: jiraGetIssueTool.description,
-    inputSchema: zodToJsonSchema(jiraGetIssueTool.schema as any) as any,
+    inputSchema: jiraGetIssueTool.schema,
+    outputSchema: jiraGetIssueTool.outputSchema,
   },
   jiraGetIssueTool.handler
 );

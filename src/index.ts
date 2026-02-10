@@ -1,4 +1,3 @@
-
 import Fastify from "fastify";
 import { config } from "./config/env.js";
 import { McpHttpClient } from "./mcp/client.js";
@@ -9,7 +8,7 @@ const server = Fastify({
   logger: { level: config.LOG_LEVEL },
 });
 
-// Create MCP client AFTER env/config is loaded
+// MCP client singleton (env already loaded)
 export const mcpClient = new McpHttpClient(
   config.MCP_BASE_URL ?? `http://localhost:${config.PORT}`
 );
@@ -23,9 +22,14 @@ async function start() {
   try {
     await server.listen({ port: config.PORT, host: "0.0.0.0" });
     server.log.info(`Server listening on ${config.PORT}`);
-    
-    // Optional: Warm up MCP client connection
-    // await mcpClient.ensureConnected(); // Private method, skip for now or expose if needed
+
+    try {
+      await mcpClient.warmup("startup");
+      server.log.info("MCP warmup completed");
+    } catch (err) {
+      server.log.warn({ err }, "MCP warmup failed (will retry on first use)");
+    }
+
   } catch (err) {
     server.log.error(err);
     process.exit(1);

@@ -56,11 +56,12 @@ export class Orchestrator {
         });
         
         // 3. Execute via MCP Client
-        const issues = await mcpClient.callTool<typeof args, SimplifiedJiraIssue[]>(
+        const response = await mcpClient.callTool<typeof args, { issues: SimplifiedJiraIssue[] }>(
           correlationId,
           'jira.searchIssues',
           args
         );
+        const issues = response.issues;
 
         // 4. Format
         result = formatter.formatJiraList(issues);

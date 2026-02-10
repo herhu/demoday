@@ -1,4 +1,3 @@
-
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { auditLogger } from "../observability/audit.js";
@@ -17,20 +16,29 @@ export class McpHttpClient {
     this.transport = new StreamableHTTPClientTransport(new URL("/mcp", this.baseUrl));
   }
 
-  private async ensureConnected(): Promise<void> {
+  async warmup(correlationId: string): Promise<void> {
+    await this.ensureConnected(correlationId);
+  }
+
+  private async ensureConnected(correlationId: string): Promise<void> {
     if (this.connected) return;
 
     try {
       await this.client.connect(this.transport);
-      // Optional (but nice): caches tool metadata and validates server tools exist
+
+      // Optional: cache tool metadata (non-fatal if it fails)
       try {
-          await this.client.listTools();
+        await this.client.listTools();
       } catch (listError) {
-          console.warn("Failed to list tools during connection warmup:", listError);
+        console.warn("Failed to list tools during connection warmup:", listError);
       }
+
       this.connected = true;
     } catch (e: any) {
-      throw new ToolError(`Failed to connect MCP client: ${e?.message ?? String(e)}`, "N/A");
+      throw new ToolError(
+        `Failed to connect MCP client: ${e?.message ?? String(e)}`,
+        correlationId
+      );
     }
   }
 
@@ -46,11 +54,14 @@ export class McpHttpClient {
       details: { toolName },
     });
 
-    await this.ensureConnected();
+    await this.ensureConnected(correlationId);
 
     let result: any;
     try {
-      result = await this.client.callTool({ name: toolName, arguments: args as Record<string, unknown> });
+      result = await this.client.callTool({
+        name: toolName,
+        arguments: args as Record<string, unknown>,
+      });
     } catch (e: any) {
       throw new ToolError(`MCP callTool failed: ${e?.message ?? String(e)}`, correlationId);
     }
@@ -59,21 +70,20 @@ export class McpHttpClient {
       throw new ToolError(`Tool returned error: ${toolName}`, correlationId);
     }
 
-    // Prefer structuredContent if you later add outputSchema
-    if (result?.structuredContent) {
-      // In SDK 1.0.1+, structuredContent might be the array. 
-      // We assume the tool returns a shape that matches TResult or needs extraction.
-      // For now, let's look for known patterns or return as is.
-      // If the caller expects a specific type, we might need to handle it.
-      // But typically structuredContent is { type: "resource" | "text" ... }[]
-      // Let's fallback to text parsing if structuredContent isn't the direct Result.
+    // ✅ Preferred path when outputSchema is defined on the server tool
+    if (result?.structuredContent !== undefined) {
+      return result.structuredContent as TResult;
     }
 
+    // Fallback path for tools returning only text content
     const first = result?.content?.[0];
     const text = first && typeof first.text === "string" ? first.text : undefined;
 
     if (!text) {
-      throw new ToolError(`Invalid tool output for ${toolName} (expected text)`, correlationId);
+      throw new ToolError(
+        `Invalid tool output for ${toolName} (expected structuredContent or text)`,
+        correlationId
+      );
     }
 
     try {
