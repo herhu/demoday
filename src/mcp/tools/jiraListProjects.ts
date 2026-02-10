@@ -3,7 +3,7 @@ import { JiraListProjectsSchema } from "../schemas/jiraListProjects.schema.js";
 import { JiraListProjectsOutputSchema } from "../schemas/jiraListProjects.output.schema.js";
 
 export const jiraListProjectsTool = {
-  name: "jira.listProjects",
+  name: "jira_listProjects",
   description: "List all accessible Jira projects",
   schema: JiraListProjectsSchema,
   outputSchema: JiraListProjectsOutputSchema,

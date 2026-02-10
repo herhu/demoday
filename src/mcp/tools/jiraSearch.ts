@@ -3,7 +3,7 @@ import { JiraSearchOutputSchema } from "../schemas/jiraSearch.output.schema.js";
 import { jiraClient } from "../../integrations/jira/client.js";
 
 export const jiraSearchTool = {
-  name: "jira.searchIssues",
+  name: "jira_searchIssues",
   description: "Search for issues in Jira using JQL",
   schema: JiraSearchSchema,
   outputSchema: JiraSearchOutputSchema,

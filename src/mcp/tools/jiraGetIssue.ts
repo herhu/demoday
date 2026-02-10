@@ -3,7 +3,7 @@ import { JiraGetIssueOutputSchema } from '../schemas/jiraGetIssue.output.schema.
 import { jiraClient } from '../../integrations/jira/client.js';
 
 export const jiraGetIssueTool = {
-  name: 'jira.getIssue',
+  name: 'jira_getIssue',
   description: 'Get details of a specific Jira issue by key',
   schema: JiraGetIssueSchema,
   outputSchema: JiraGetIssueOutputSchema,

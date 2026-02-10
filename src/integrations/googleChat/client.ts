@@ -37,6 +37,21 @@ export class GoogleChatClient {
       throw error;
     }
   }
+
+  async listSpaces(pageSize: number = 10, pageToken?: string): Promise<chat_v1.Schema$ListSpacesResponse> {
+    const request: chat_v1.Params$Resource$Spaces$List = {
+      pageSize,
+      pageToken,
+    };
+
+    try {
+      const response = await this.chat.spaces.list(request);
+      return response.data;
+    } catch (error) {
+      console.error("Failed to list Google Chat spaces:", error);
+      throw error;
+    }
+  }
 }
 
 export const googleChatClient = new GoogleChatClient();

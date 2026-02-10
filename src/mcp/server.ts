@@ -38,3 +38,26 @@ mcpServer.registerTool(
   },
   jiraListProjectsTool.handler
 );
+
+import { googleChatListSpacesTool } from "./tools/googleChatListSpaces.js";
+import { googleChatSendMessageTool } from "./tools/googleChatSendMessage.js";
+
+mcpServer.registerTool(
+  googleChatListSpacesTool.name,
+  {
+    description: googleChatListSpacesTool.description,
+    inputSchema: googleChatListSpacesTool.schema,
+    outputSchema: googleChatListSpacesTool.outputSchema,
+  },
+  googleChatListSpacesTool.handler
+);
+
+mcpServer.registerTool(
+  googleChatSendMessageTool.name,
+  {
+    description: googleChatSendMessageTool.description,
+    inputSchema: googleChatSendMessageTool.schema,
+    outputSchema: googleChatSendMessageTool.outputSchema,
+  },
+  googleChatSendMessageTool.handler
+);
