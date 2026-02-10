@@ -7,6 +7,7 @@ export const JiraGetIssueOutputSchema = z.object({
   status: z.string(),
   priority: z.string().optional(),
   assignee: z.string().optional(),
+  url: z.string().url(),
 });
 
 export type JiraGetIssueOutput = z.infer<typeof JiraGetIssueOutputSchema>;

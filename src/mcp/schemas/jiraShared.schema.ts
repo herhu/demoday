@@ -22,6 +22,11 @@ export const JiraIssueSummarySchema = z.object({
     .string()
     .optional()
     .describe("Display name of the assignee (if any)"),
+
+  url: z
+    .string()
+    .url()
+    .describe("Direct URL to the issue"),
 });
 
 export type JiraIssueSummary = z.infer<typeof JiraIssueSummarySchema>;

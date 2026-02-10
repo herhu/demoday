@@ -1,6 +1,7 @@
 import { JiraSearchSchema } from "../schemas/jiraSearch.schema.js";
 import { JiraSearchOutputSchema } from "../schemas/jiraSearch.output.schema.js";
 import { jiraClient } from "../../integrations/jira/client.js";
+import { config } from "../../config/env.js";
 
 export const jiraSearchTool = {
   name: "jira_searchIssues",
@@ -17,6 +18,7 @@ export const jiraSearchTool = {
       status: issue.fields.status.name,
       priority: issue.fields.priority?.name,
       assignee: issue.fields.assignee?.displayName,
+      url: `${config.JIRA_BASE_URL}/browse/${issue.key}`,
     }));
 
     // Verify against schema (optional but good for safety)

@@ -1,6 +1,7 @@
 import { JiraGetIssueSchema } from '../schemas/jiraGetIssue.schema.js';
 import { JiraGetIssueOutputSchema } from '../schemas/jiraGetIssue.output.schema.js';
 import { jiraClient } from '../../integrations/jira/client.js';
+import { config } from '../../config/env.js';
 
 export const jiraGetIssueTool = {
   name: 'jira_getIssue',
@@ -18,6 +19,7 @@ export const jiraGetIssueTool = {
       status: issue.fields.status.name,
       priority: issue.fields.priority?.name,
       assignee: issue.fields.assignee?.displayName,
+      url: `${config.JIRA_BASE_URL}/browse/${issue.key}`,
     };
 
     // Verify against schema
