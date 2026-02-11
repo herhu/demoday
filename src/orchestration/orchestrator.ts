@@ -2,13 +2,17 @@ import { intentParser } from './intent.js';
 import { policy } from './policy.js';
 import { formatter } from './formatter.js';
 import { auditLogger } from '../observability/audit.js';
-import { mcpClient } from '../index.js'; // Import the singleton client
 import { validate } from '../utils/validate.js';
 import { JiraSearchSchema } from '../mcp/schemas/jiraSearch.schema.js'; // Updated import path
 import { JiraGetIssueSchema } from '../mcp/schemas/jiraGetIssue.schema.js'; // Updated import path
 import { toPublicMessage } from '../utils/errors.js';
 import type { SimplifiedJiraIssue, SimplifiedJiraProject } from '../integrations/jira/types.js'; // New import
 import { JiraListProjectsSchema } from '../mcp/schemas/jiraListProjects.schema.js';
+
+// Import tools directly
+import { jiraSearchTool } from '../mcp/tools/jiraSearch.js';
+import { jiraGetIssueTool } from '../mcp/tools/jiraGetIssue.js';
+import { jiraListProjectsTool } from '../mcp/tools/jiraListProjects.js';
 
 export class Orchestrator {
   async handleChatCommand(
@@ -56,13 +60,11 @@ export class Orchestrator {
           details: { tool: 'jira.searchIssues', args },
         });
         
-        // 3. Execute via MCP Client
-        const response = await mcpClient.callTool<typeof args, { issues: SimplifiedJiraIssue[] }>(
-          correlationId,
-          'jira.searchIssues',
-          args
-        );
-        const issues = response.issues;
+        // 3. Execute via Tool Handler directly
+        const response = await jiraSearchTool.handler(args);
+        
+        // Extract structured content (cast as needed since handler return type is generic)
+        const issues = (response.structuredContent as { issues: SimplifiedJiraIssue[] }).issues;
 
         // 4. Format
         result = formatter.formatJiraList(issues);
@@ -88,12 +90,13 @@ export class Orchestrator {
           details: { tool: 'jira.getIssue', args },
         });
          
-        // 3. Execute via MCP Client
-        const issue = await mcpClient.callTool<typeof args, SimplifiedJiraIssue>(
-          correlationId,
-          'jira.getIssue',
-          args
-        );
+        // 3. Execute via Tool Handler directly
+        const response = await jiraGetIssueTool.handler(args);
+        
+        // Extract structured content
+        // jiraGetIssueTool returns structuredContent which IS the issue (SimplifiedJiraIssue)?
+        // Let's verify jiraGetIssueTool return type. Assuming it returns the issue object in structuredContent.
+        const issue = response.structuredContent as SimplifiedJiraIssue;
 
         // 4. Format
         result = formatter.formatJiraIssue({
@@ -122,15 +125,14 @@ export class Orchestrator {
             details: { tool: 'jira.listProjects', args },
         });
 
-        // 3. Execute via MCP Client
-        const response = await mcpClient.callTool<typeof args, { projects: SimplifiedJiraProject[] }>(
-            correlationId,
-            'jira.listProjects',
-            args
-        );
+        // 3. Execute via Tool Handler directly
+        const response = await jiraListProjectsTool.handler(args);
+        
+        const projects = (response.structuredContent as { projects: SimplifiedJiraProject[] }).projects;
         
         // 4. Format
-        result = formatter.formatProjectList(response.projects);
+        // 4. Format
+        result = formatter.formatProjectList(projects);
 
       } else {
         result = "I'm sorry, I don't know how to handle that request.";

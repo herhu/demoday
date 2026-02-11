@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { createMcpHttpBridge } from './nodeBridge.js';
-import { mcpServer } from '../server.js';
+import { createMcpServer } from '../server.js';
 
 export async function mcpRoute(server: FastifyInstance) {
-  // Create the bridge once (the bridge factory awaits connection)
-  const bridge = await createMcpHttpBridge(mcpServer);
+  // Pass the factory function to the bridge creator
+  const bridge = await createMcpHttpBridge(createMcpServer);
+
 
   // Use a child scope to override content type parsing for /mcp
   server.register(async (mcpScope) => {
