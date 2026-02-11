@@ -71,7 +71,6 @@ export const createMcpServer = () => {
         {
           description: widgetTool.description,
           inputSchema: widgetTool.schema,
-          outputSchema: widgetTool.outputSchema,
         },
         widgetTool.handler
       );

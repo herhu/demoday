@@ -29,6 +29,7 @@ async function start() {
   try {
     await server.listen({ port: config.PORT, host: "0.0.0.0" });
     server.log.info(`Server listening on ${config.PORT}`);
+    server.log.info(`MCP Base URL: ${config.MCP_BASE_URL || "http://localhost:" + config.PORT}`);
 
   } catch (err) {
     server.log.error(err);

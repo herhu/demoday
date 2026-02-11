@@ -1,29 +1,26 @@
 import { z } from "zod";
 import { config } from "../../config/env.js";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 export const widgetTool = {
   name: "show_widget",
   description: "Displays a dashboard widget in the chat interface.",
   schema: z.object({}),
-  outputSchema: z.object({
-    _meta: z.object({
-      ui: z.object({
-        resourceUri: z.string(),
-      }),
-    }),
-    content: z.array(
-      z.object({
-        type: z.literal("text"),
-        text: z.string(),
-      })
-    ),
-  }),
   handler: async () => {
+    let dashboardContent = "Dashboard content unavailable.";
+    try {
+      const dashboardPath = path.join(process.cwd(), "public", "dashboard.md");
+      dashboardContent = await fs.readFile(dashboardPath, "utf-8");
+    } catch (err) {
+      console.error("Error reading dashboard.md:", err);
+    }
+
     return {
       content: [
         {
           type: "text" as const,
-          text: "Here is the widget you requested.",
+          text: dashboardContent,
         },
       ],
       _meta: {
