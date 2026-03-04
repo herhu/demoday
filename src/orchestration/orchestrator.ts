@@ -1,18 +1,28 @@
-import { intentParser } from './intent.js';
+import { aiIntentParser } from './aiIntent.js';
+import { pipeline } from './pipeline.js';
 import { policy } from './policy.js';
 import { formatter } from './formatter.js';
 import { auditLogger } from '../observability/audit.js';
 import { validate } from '../utils/validate.js';
-import { JiraSearchSchema } from '../mcp/schemas/jiraSearch.schema.js'; // Updated import path
-import { JiraGetIssueSchema } from '../mcp/schemas/jiraGetIssue.schema.js'; // Updated import path
+import { CircuitBreaker } from '../utils/circuitBreaker.js';
 import { toPublicMessage } from '../utils/errors.js';
-import type { SimplifiedJiraIssue, SimplifiedJiraProject } from '../integrations/jira/types.js'; // New import
-import { JiraListProjectsSchema } from '../mcp/schemas/jiraListProjects.schema.js';
+import type { SimplifiedJiraIssue, SimplifiedJiraProject } from '../integrations/jira/types.js';
 
-// Import tools directly
+import { JiraSearchSchema } from '../mcp/schemas/jiraSearch.schema.js';
+import { JiraGetIssueSchema } from '../mcp/schemas/jiraGetIssue.schema.js';
+import { JiraListProjectsSchema } from '../mcp/schemas/jiraListProjects.schema.js';
+import { JiraCreateIssueSchema } from '../mcp/schemas/jiraCreateIssue.schema.js';
+import { JiraAssignIssueSchema } from '../mcp/schemas/jiraAssignIssue.schema.js';
+import { JiraAddWorklogSchema } from '../mcp/schemas/jiraAddWorklog.schema.js';
+
 import { jiraSearchTool } from '../mcp/tools/jiraSearch.js';
 import { jiraGetIssueTool } from '../mcp/tools/jiraGetIssue.js';
 import { jiraListProjectsTool } from '../mcp/tools/jiraListProjects.js';
+import { jiraCreateIssueTool } from '../mcp/tools/jiraCreateIssue.js';
+import { jiraAssignIssueTool } from '../mcp/tools/jiraAssignIssue.js';
+import { jiraAddWorklogTool } from '../mcp/tools/jiraAddWorklog.js';
+
+const jiraCircuit = new CircuitBreaker('jiraApi');
 
 export class Orchestrator {
   async handleChatCommand(
@@ -22,118 +32,108 @@ export class Orchestrator {
     roomId: string,
     text: string
   ): Promise<string> {
-    
+
     auditLogger.log({ correlationId, source, event: 'ingress', userId, details: { roomId, text } });
 
     try {
-      // 1. Policy
+      // 1. Foundation: Policy check
       policy.assertAllowedSource(source, correlationId);
-      policy.assertWithinLimits(text, correlationId);
 
-      // 2. Intent
-      const intent = intentParser.parse(text);
+      // 2. Foundation: Security and Token Window Sequential Data Quality Pipeline
+      pipeline.validateLengthAndTokens(text, correlationId);
+      pipeline.validateContentQuality(text, correlationId);
+
+      // 3. Foundation: AI Enrichment and Extraction
+      const intent = await aiIntentParser.parse(text, correlationId);
+
       if (intent.kind === 'UNKNOWN' || intent.kind === 'HELP') {
         return formatter.formatHelp();
       }
 
-      // 3. Execution (Deterministic Plan)
+      // 4. Execution Pipeline (with Schema Validations acting as Contexts and Circuit Breakers for execution)
       let result;
       if (intent.kind === 'JIRA_SEARCH') {
-        // 1. Policy check
         policy.assertAllowedTool('jira.searchIssues', correlationId);
-        
-        // 2. Validate args
-        const args = validate(
-          JiraSearchSchema,
-          { 
-            jql: intent.parameters?.jql, 
-            maxResults: 10,
-            correlationId // Pass correlationId to schema validation/object
-          },
+
+        const args = validate(JiraSearchSchema, {
+          jql: intent.parameters?.jql,
           correlationId
-        );
+        }, correlationId);
 
-        auditLogger.log({
-          correlationId,
-          source: 'orchestrator',
-          event: 'tool.call',
-          details: { tool: 'jira.searchIssues', args },
-        });
-        
-        // 3. Execute via Tool Handler directly
-        const response = await jiraSearchTool.handler(args);
-        
-        // Extract structured content (cast as needed since handler return type is generic)
+        auditLogger.log({ correlationId, source: 'orchestrator', event: 'tool.call', details: { tool: 'jira.searchIssues', args } });
+
+        const response = await jiraCircuit.execute(() => jiraSearchTool.handler(args));
         const issues = (response.structuredContent as { issues: SimplifiedJiraIssue[] }).issues;
-
-        // 4. Format
         result = formatter.formatJiraList(issues);
 
       } else if (intent.kind === 'JIRA_GET') {
-        // 1. Policy check
         policy.assertAllowedTool('jira.getIssue', correlationId);
-         
-        // 2. Validate args
-        const args = validate(
-          JiraGetIssueSchema,
-          { 
-            issueKey: intent.parameters?.issueKey,
-            correlationId 
-          },
+
+        const args = validate(JiraGetIssueSchema, {
+          issueKey: intent.parameters?.issueKey,
           correlationId
-        );
+        }, correlationId);
 
-        auditLogger.log({
-          correlationId,
-          source: 'orchestrator',
-          event: 'tool.call',
-          details: { tool: 'jira.getIssue', args },
-        });
-         
-        // 3. Execute via Tool Handler directly
-        const response = await jiraGetIssueTool.handler(args);
-        
-        // Extract structured content
-        // jiraGetIssueTool returns structuredContent which IS the issue (SimplifiedJiraIssue)?
-        // Let's verify jiraGetIssueTool return type. Assuming it returns the issue object in structuredContent.
+        auditLogger.log({ correlationId, source: 'orchestrator', event: 'tool.call', details: { tool: 'jira.getIssue', args } });
+
+        const response = await jiraCircuit.execute(() => jiraGetIssueTool.handler(args));
         const issue = response.structuredContent as SimplifiedJiraIssue;
-
-        // 4. Format
         result = formatter.formatJiraIssue({
-            key: issue.key,
-            summary: issue.summary,
-            status: issue.status,
-            priority: issue.priority,
-            assignee: issue.assignee,
-            description: issue.description
+          key: issue.key, summary: issue.summary, status: issue.status,
+          priority: issue.priority, assignee: issue.assignee, description: issue.description
         });
       } else if (intent.kind === 'JIRA_LIST_PROJECTS') {
-        // 1. Policy check
         policy.assertAllowedTool('jira.listProjects', correlationId);
 
-        // 2. Validate args (empty schema, but good practice)
-        const args = validate(
-            JiraListProjectsSchema,
-            { correlationId },
-            correlationId
-        );
+        const args = validate(JiraListProjectsSchema, { correlationId }, correlationId);
+        auditLogger.log({ correlationId, source: 'orchestrator', event: 'tool.call', details: { tool: 'jira.listProjects', args } });
 
-        auditLogger.log({
-            correlationId,
-            source: 'orchestrator',
-            event: 'tool.call',
-            details: { tool: 'jira.listProjects', args },
-        });
-
-        // 3. Execute via Tool Handler directly
-        const response = await jiraListProjectsTool.handler(args);
-        
+        const response = await jiraCircuit.execute(() => jiraListProjectsTool.handler(args));
         const projects = (response.structuredContent as { projects: SimplifiedJiraProject[] }).projects;
-        
-        // 4. Format
-        // 4. Format
         result = formatter.formatProjectList(projects);
 
+      } else if (intent.kind === 'JIRA_CREATE_ISSUE') {
+        policy.assertAllowedTool('jira.createIssue', correlationId);
+
+        const args = validate(JiraCreateIssueSchema, {
+          projectKey: intent.parameters?.projectKey,
+          summary: intent.parameters?.summary,
+          issueType: intent.parameters?.issueType,
+          correlationId
+        }, correlationId);
+
+        auditLogger.log({ correlationId, source: 'orchestrator', event: 'tool.call', details: { tool: 'jira.createIssue', args } });
+
+        const response = await jiraCircuit.execute(() => jiraCreateIssueTool.handler(args));
+        result = response?.content?.[0]?.text;
+
+      } else if (intent.kind === 'JIRA_ASSIGN_ISSUE') {
+        policy.assertAllowedTool('jira.assignIssue', correlationId);
+
+        const args = validate(JiraAssignIssueSchema, {
+          issueKey: intent.parameters?.issueKey,
+          assigneeId: intent.parameters?.assigneeId,
+          correlationId
+        }, correlationId);
+
+        auditLogger.log({ correlationId, source: 'orchestrator', event: 'tool.call', details: { tool: 'jira.assignIssue', args } });
+
+        const response = await jiraCircuit.execute(() => jiraAssignIssueTool.handler(args));
+        result = response?.content?.[0]?.text;
+
+      } else if (intent.kind === 'JIRA_ADD_WORKLOG') {
+        policy.assertAllowedTool('jira.addWorklog', correlationId);
+
+        const args = validate(JiraAddWorklogSchema, {
+          issueKey: intent.parameters?.issueKey,
+          timeSpent: intent.parameters?.timeSpent,
+          correlationId
+        }, correlationId);
+
+        auditLogger.log({ correlationId, source: 'orchestrator', event: 'tool.call', details: { tool: 'jira.addWorklog', args } });
+
+        const response = await jiraCircuit.execute(() => jiraAddWorklogTool.handler(args));
+        result = response?.content?.[0]?.text;
       } else {
         result = "I'm sorry, I don't know how to handle that request.";
       }
@@ -143,12 +143,12 @@ export class Orchestrator {
 
     } catch (error: any) {
       auditLogger.log({ correlationId, source, event: 'tool.err', error: error.message });
-      
+
       // Inject correlation ID if missing from error
       if (error && typeof error === 'object' && !error.correlationId) {
-          error.correlationId = correlationId;
+        error.correlationId = correlationId;
       }
-      
+
       return toPublicMessage(error);
     }
   }

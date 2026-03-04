@@ -15,6 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "@fastify/static": "^7.0.4",
+    "@google/genai": "^1.43.0",
     "@modelcontextprotocol/sdk": "^1.0.1",
     "dotenv": "^16.4.5",
     "fastify": "^4.26.1",

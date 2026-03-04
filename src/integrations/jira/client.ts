@@ -5,15 +5,15 @@ import { httpRequest } from "../../utils/http.js";
 export class JiraClient {
   private get authHeader(): string {
     const { jiraEmail, jiraApiToken, jiraBaseUrl } = getSecrets();
-    
+
     // Heuristic: Jira Cloud usually ends in .atlassian.net
     // If custom domain or server/DC, assume Personal Access Token (Bearer)
     // unless user explicitly provided cloud credentials (email + token).
     // However, PAT is safer default for non-atlassian domains.
     if (jiraBaseUrl.includes(".atlassian.net")) {
-        return `Basic ${Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString("base64")}`;
+      return `Basic ${Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString("base64")}`;
     }
-    
+
     // Default to Bearer for self-hosted/DC instances using PAT
     return `Bearer ${jiraApiToken}`;
   }
@@ -69,6 +69,45 @@ export class JiraClient {
     );
   }
 
+  async createIssue(projectKey: string, summary: string, issueType: string = "Task", correlationId?: string): Promise<any> {
+    return this.fetch<any>(
+      `/issue`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          fields: {
+            project: { key: projectKey },
+            summary,
+            issuetype: { name: issueType }
+          }
+        })
+      },
+      correlationId
+    );
+  }
+
+  async assignIssue(issueKey: string, assigneeId: string, correlationId?: string): Promise<any> {
+    return this.fetch<any>(
+      `/issue/${issueKey}/assignee`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ accountId: assigneeId })
+      },
+      correlationId
+    );
+  }
+
+  async addWorklog(issueKey: string, timeSpent: string, correlationId?: string): Promise<any> {
+    return this.fetch<any>(
+      `/issue/${issueKey}/worklog`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ timeSpent })
+      },
+      correlationId
+    );
+  }
+
   async getProjects(correlationId?: string): Promise<SimplifiedJiraProject[]> {
     return this.fetch<SimplifiedJiraProject[]>(
       `/project`,
@@ -77,5 +116,6 @@ export class JiraClient {
     );
   }
 }
+
 
 export const jiraClient = new JiraClient();

@@ -1,0 +1,80 @@
+# Implementation Plan: AI-Powered Orchestration Pipeline
+
+This plan outlines the steps to upgrade the current static bot into a robust, AI-driven pipeline that understands natural language, enforces strict data quality, uses circuit breakers for resilience, and executes Jira user flows.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The Gemini API will be used for Intent parsing and entity extraction. We'll need the `GEMINI_API_KEY` to be present in the `.env` file for this to work.
+
+> [!TIP]
+> We will implement specific thresholds for token control and context windows to ensure the foundation model receives optimally prepared inputs without exceeding limits.
+
+## Proposed Architecture Pipeline
+
+We will implement a **Sequential Processing** pipeline to process user intents. Each stage must successfully complete before the next begins, providing a predictable flow, guaranteed processing order, and clear audit trails:
+
+`Data Input → Schema Validation → Content Quality Check → Safety Validation → Output`
+
+### Pipeline Stages & Data Quality Foundations
+
+1. **Assess Completeness & Timeliness**: 
+   - Ensure the raw input contains essential constraints for foundation model processing.
+2. **Token Control & Context Window Management**:
+   - Establish a token threshold (e.g., maximum 4000 tokens) before sending to the model to avoid excessive API costs and manage the context window effectively.
+3. **Verify Accuracy & Confirm Consistency**:
+   - Use Data Quality rules (DQDL equivalent) implemented via Zod schemas to ensure inputs conform perfectly to our system contract.
+   - Example rules: `ColumnLength content between 10 and 4000`, `IsComplete content`.
+
+## Proposed Changes
+
+### Dependencies
+#### [MODIFY] [package.json](file:///Users/hernan/projects/demo/package.json)
+- Add `@google/genai` to dependencies for calling the Gemini API.
+
+---
+### Resilience & Reliability
+#### [NEW] [src/utils/circuitBreaker.ts](file:///Users/hernan/projects/demo/src/utils/circuitBreaker.ts)
+- Implement a `CircuitBreaker` wrapper class with Open, Closed, and Half-Open states to protect against Jira API and Foundation Model failures.
+- Includes fallbacks and recovery timeouts.
+
+---
+### AI Orchestration & Data Verification
+#### [NEW] [src/orchestration/pipeline.ts](file:///Users/hernan/projects/demo/src/orchestration/pipeline.ts)
+- Implement the sequential processing functions:
+  - `validateLengthAndTokens()`: Evaluates token counts to maintain context window thresholds.
+  - `validateContentQuality()`: Checks character encodings, formatting, and safety rules.
+  - `enforceSchemaConsistency()`: Passes through specific Zod contracts.
+
+#### [NEW] [src/orchestration/aiIntent.ts](file:///Users/hernan/projects/demo/src/orchestration/aiIntent.ts)
+- A Gemini-powered intent extractor combining Structured Outputs and schemas to reliably glean commands (`JIRA_CREATE_ISSUE`, `JIRA_ASSIGN_ISSUE`, `JIRA_ADD_WORKLOG`) and payload fields.
+
+#### [MODIFY] [src/orchestration/orchestrator.ts](file:///Users/hernan/projects/demo/src/orchestration/orchestrator.ts)
+- Wire the new execution pipeline:
+  1. **Data Collection**: Receive text.
+  2. **Data Aggregation & Content Quality Checks**: Token limits, format verification.
+  3. **Enrichment**: Gemini parsing via `aiIntent.ts`.
+  4. **Validation**: Strict accuracy validation via Zod contract schemas.
+  5. **Circuit Breaker Execution**: Run tool.
+  6. **Formatting**: Output beautifully structured Markdown.
+
+---
+### New Jira Tools & Schemas
+#### [NEW] [src/mcp/schemas/jiraCreateIssue.schema.ts](file:///Users/hernan/projects/demo/src/mcp/schemas/jiraCreateIssue.schema.ts)
+#### [NEW] [src/mcp/schemas/jiraAssignIssue.schema.ts](file:///Users/hernan/projects/demo/src/mcp/schemas/jiraAssignIssue.schema.ts)
+#### [NEW] [src/mcp/schemas/jiraAddWorklog.schema.ts](file:///Users/hernan/projects/demo/src/mcp/schemas/jiraAddWorklog.schema.ts)
+
+#### [NEW] [src/mcp/tools/jiraCreateIssue.ts](file:///Users/hernan/projects/demo/src/mcp/tools/jiraCreateIssue.ts)
+#### [NEW] [src/mcp/tools/jiraAssignIssue.ts](file:///Users/hernan/projects/demo/src/mcp/tools/jiraAssignIssue.ts)
+#### [NEW] [src/mcp/tools/jiraAddWorklog.ts](file:///Users/hernan/projects/demo/src/mcp/tools/jiraAddWorklog.ts)
+
+## Verification Plan
+
+### Automated Tests
+- We will execute a standalone TypeScript script validating the **Sequential Processing** pipeline.
+- We will verify token rejection thresholds, schema validation, and content completeness gates using mocked texts.
+
+### Manual Verification
+1. Attempt to send out-of-range text (e.g., larger than context window) to trigger token limit fallback.
+2. Send natural requests like "Log 45m on NJS-123 diagnosing DB issues".
+3. Verify that the orchestrator rejects bad payloads, calls the model securely, and completes the transaction using the Circuit Breaker logic.
